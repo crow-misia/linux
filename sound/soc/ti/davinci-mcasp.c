@@ -1386,6 +1386,58 @@ static int davinci_mcasp_hw_rule_min_periodsize(
 	return snd_interval_refine(period_size, &frames);
 }
 
+static int davinci_mcasp_set_channel_map(struct snd_soc_dai *cpu_dai,
+		unsigned int tx_num, unsigned int *tx_slot,
+		unsigned int rx_num, unsigned int *rx_slot)
+{
+	struct davinci_mcasp *mcasp = snd_soc_dai_get_drvdata(cpu_dai);
+	unsigned int chan;
+	unsigned int slot;
+
+	/*
+	 * Notice: This sets serializer map.
+	 *         There might be multiple channels on each serializer.
+	 */
+
+	/* check for validity */
+
+	for (chan = 0; chan < tx_num; chan++) {
+		slot = tx_slot[chan];
+		if (slot >= mcasp->num_serializer) {
+			return -EINVAL;
+		}
+	}
+
+	for (chan = 0; chan < rx_num; chan++) {
+		slot = rx_slot[chan];
+		if (slot >= mcasp->num_serializer) {
+			return -EINVAL;
+		}
+	}
+
+	/* update configuration of serializers */
+
+	for (slot = 0; slot < mcasp->num_serializer; slot++) {
+		mcasp->serial_dir[slot] = INACTIVE_MODE;
+	}
+
+	for (chan = 0; chan < tx_num; chan++) {
+		slot = tx_slot[chan];
+		if (slot < mcasp->num_serializer) {
+			mcasp->serial_dir[slot] = TX_MODE;
+		}
+	}
+
+	for (chan = 0; chan < rx_num; chan++) {
+		slot = rx_slot[chan];
+		if (slot < mcasp->num_serializer) {
+			mcasp->serial_dir[slot] = RX_MODE;
+		}
+	}
+
+	return 0;
+}
+
 static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 				 struct snd_soc_dai *cpu_dai)
 {
@@ -1509,6 +1561,7 @@ static const struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 	.set_clkdiv	= davinci_mcasp_set_clkdiv,
 	.set_sysclk	= davinci_mcasp_set_sysclk,
 	.set_tdm_slot	= davinci_mcasp_set_tdm_slot,
+	.set_channel_map	= davinci_mcasp_set_channel_map,
 };
 
 static int davinci_mcasp_dai_probe(struct snd_soc_dai *dai)
