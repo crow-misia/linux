@@ -158,6 +158,8 @@
 #define SND_SOC_DAI_FORMAT_DSP_B        5 /* L data MSB during FRM LRC */
 #define SND_SOC_DAI_FORMAT_AC97         6 /* AC97 */
 #define SND_SOC_DAI_FORMAT_PDM          7 /* Pulse density modulation */
+#define SND_SOC_DAI_FORMAT_DIT          8 /* Digital Audio Interface Transmit
+                                             (S/PDIF, AES-3, or IEC-60958 format) */
 
 /* left and right justified also known as MSB and LSB respectively */
 #define SND_SOC_DAI_FORMAT_MSB          SND_SOC_DAI_FORMAT_LEFT_J
