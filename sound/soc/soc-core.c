@@ -3551,6 +3551,7 @@ unsigned int snd_soc_of_parse_daifmt(struct device_node *np,
 		{ "dsp_b",	SND_SOC_DAIFMT_DSP_B },
 		{ "ac97",	SND_SOC_DAIFMT_AC97 },
 		{ "pdm",	SND_SOC_DAIFMT_PDM},
+		{ "dit",	SND_SOC_DAIFMT_DIT},
 		{ "msb",	SND_SOC_DAIFMT_MSB },
 		{ "lsb",	SND_SOC_DAIFMT_LSB },
 	};
