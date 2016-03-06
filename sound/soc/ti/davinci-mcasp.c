@@ -94,6 +94,7 @@ struct davinci_mcasp {
 	u8	*serial_dir;
 	u8	version;
 	u8	bclk_div;
+	bool	right_justified;
 	int	streams;
 	u32	irq_request[2];
 	int	dma_request[2];
@@ -444,6 +445,7 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		return 0;
 
 	pm_runtime_get_sync(mcasp->dev);
+	mcasp->right_justified = false;
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_DSP_A:
 		mcasp_clr_bits(mcasp, DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
@@ -467,6 +469,8 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		/* FS need to be inverted */
 		inv_fs = true;
 		break;
+	case SND_SOC_DAIFMT_RIGHT_J:
+		mcasp->right_justified = true;
 	case SND_SOC_DAIFMT_LEFT_J:
 		/* configure a full-word SYNC pulse (LRCLK) */
 		mcasp_set_bits(mcasp, DAVINCI_MCASP_TXFMCTL_REG, FSXDUR);
@@ -814,6 +818,11 @@ static int davinci_config_channel_size(struct davinci_mcasp *mcasp,
 
 	/* mapping of the XSSZ bit-field as described in the datasheet */
 	fmt = (slot_width >> 1) - 1;
+
+	if (mcasp->right_justified) {
+		tx_rotate = 0;
+		/* TODO: RX? */
+	}
 
 	if (mcasp->op_mode != DAVINCI_MCASP_DIT_MODE) {
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, RXSSZ(fmt),
