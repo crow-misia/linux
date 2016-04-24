@@ -447,6 +447,8 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 
 	pm_runtime_get_sync(mcasp->dev);
 	if ((fmt & SND_SOC_DAIFMT_FORMAT_MASK) == SND_SOC_DAIFMT_DIT) {
+		if (mcasp->dsd_mode[SNDRV_PCM_STREAM_PLAYBACK])
+			return -EINVAL;
 		mcasp->op_mode = DAVINCI_MCASP_DIT_MODE;
 		goto out;
 	}
@@ -878,9 +880,32 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 	u8 max_active_serializers = (channels + slots - 1) / slots;
 	int active_serializers, numevt;
 	u32 reg;
+	u32 disable_pins;
+	u32 disable_pins_mask;
+
 	/* Default configuration */
 	if (mcasp->version < MCASP_VERSION_3)
 		mcasp_set_bits(mcasp, DAVINCI_MCASP_PWREMUMGT_REG, MCASP_SOFT);
+
+	if (stream != SNDRV_PCM_STREAM_PLAYBACK) {
+		/* do not modify receiving pins */
+		disable_pins = 0;
+		disable_pins_mask = 0;
+	} else if (mcasp->op_mode == DAVINCI_MCASP_DIT_MODE) {
+		disable_pins = PIN_BIT_AFSX | PIN_BIT_ACLKX;
+		disable_pins_mask = PIN_BIT_AFSX | PIN_BIT_ACLKX;
+	} else if (mcasp->dsd_mode[stream]) {
+		disable_pins = PIN_BIT_AFSX;
+		disable_pins_mask = PIN_BIT_AFSX | PIN_BIT_ACLKX;
+	} else {
+		/* re-enable previously disabled pins */
+		disable_pins = 0;
+		disable_pins_mask = PIN_BIT_AFSX | PIN_BIT_ACLKX;
+	}
+	mcasp_mod_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, disable_pins,
+			disable_pins_mask);
+	mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, disable_pins);
+	mcasp_set_bits(mcasp, DAVINCI_MCASP_PDIR_REG, disable_pins);
 
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		mcasp_set_reg(mcasp, DAVINCI_MCASP_TXSTAT_REG, 0xFFFFFFFF);
