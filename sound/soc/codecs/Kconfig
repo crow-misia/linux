@@ -46,6 +46,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_AK5558 if I2C
 	select SND_SOC_ALC5623 if I2C
 	select SND_SOC_ALC5632 if I2C
+	select SND_SOC_BOTIC_CODEC
 	select SND_SOC_BT_SCO
 	select SND_SOC_BD28623
 	select SND_SOC_CQ0093VC
@@ -141,6 +142,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_RT5668 if I2C
 	select SND_SOC_RT5670 if I2C
 	select SND_SOC_RT5677 if I2C && SPI_MASTER
+	select SND_SOC_SABRE32 if I2C
 	select SND_SOC_RT5682 if I2C
 	select SND_SOC_SGTL5000 if I2C
 	select SND_SOC_SI476X if MFD_SI476X_CORE
@@ -427,6 +429,9 @@ config SND_SOC_ALC5623
 
 config SND_SOC_ALC5632
 	tristate
+
+config SND_SOC_BOTIC_CODEC
+	tristate "Botic CODEC"
 
 config SND_SOC_BD28623
 	tristate "ROHM BD28623 CODEC"
@@ -876,6 +881,10 @@ config SND_SOC_RT5677_SPI
 
 config SND_SOC_RT5682
 	tristate
+
+config SND_SOC_SABRE32
+	tristate "ESS Technology Sabre32 DAC"
+	depends on I2C
 
 #Freescale sgtl5000 codec
 config SND_SOC_SGTL5000
