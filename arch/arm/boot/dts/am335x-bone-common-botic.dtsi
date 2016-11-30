@@ -1,0 +1,25 @@
+/ {
+	botic_codec: botic_codec {
+		compatible = "botic-audio-codec";
+		status = "okay";
+	};
+
+	botic {
+		compatible = "botic-audio-card";
+		status = "okay";
+
+		pinctrl-names = "init", "default", "compat";
+		pinctrl-0 = <&botic_cape_common_pins>;
+		pinctrl-1 = <&botic_cape_common_pins &botic_cape_default_pins>;
+		pinctrl-2 = <&botic_cape_common_pins &botic_cape_compat_pins>;
+
+		audio-port = <&mcasp0>;
+		audio-codec = <&botic_codec>;
+		audio-codec-dai = "botic-hifi";
+
+		int-masterclk-enable = <&gpio1 27 0>;
+		ext-masterclk-switch = <&gpio0 15 0>;
+		dsd-format-switch = <&gpio0 14 0>;
+		card-power-switch = <&gpio1 18 0>;
+	};
+};
