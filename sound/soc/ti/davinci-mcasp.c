@@ -98,6 +98,7 @@ struct davinci_mcasp {
 	int	streams;
 	u32	irq_request[2];
 	int	dma_request[2];
+	bool	dsd_mode[2];
 
 	int	sysclk_freq;
 	bool	bclk_master;
@@ -848,7 +849,7 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 	int i;
 	u8 tx_ser = 0;
 	u8 rx_ser = 0;
-	u8 slots = mcasp->tdm_slots;
+	u8 slots = mcasp->dsd_mode[stream] ? 1 : mcasp->tdm_slots;
 	u8 max_active_serializers = (channels + slots - 1) / slots;
 	int active_serializers, numevt;
 	u32 reg;
@@ -961,6 +962,7 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 	int active_serializers;
 	u32 mask = 0;
 	u32 busel = 0;
+	u32 mod;
 
 	total_slots = mcasp->tdm_slots;
 
@@ -999,16 +1001,24 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 	if (!mcasp->dat_port)
 		busel = TXSEL;
 
+	if (mcasp->dsd_mode[stream]) {
+		mask = 1;
+		busel = 0;
+		mod = 0;
+	} else {
+		mod = total_slots;
+	}
+
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		mcasp_set_reg(mcasp, DAVINCI_MCASP_TXTDM_REG, mask);
 		mcasp_set_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, busel | TXORD);
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMCTL_REG,
-			       FSXMOD(total_slots), FSXMOD(0x1FF));
+			       FSXMOD(mod), FSXMOD(0x1FF));
 	} else if (stream == SNDRV_PCM_STREAM_CAPTURE) {
 		mcasp_set_reg(mcasp, DAVINCI_MCASP_RXTDM_REG, mask);
 		mcasp_set_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, busel | RXORD);
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMCTL_REG,
-			       FSRMOD(total_slots), FSRMOD(0x1FF));
+			       FSRMOD(mod), FSRMOD(0x1FF));
 		/*
 		 * If McASP is set to be TX/RX synchronous and the playback is
 		 * not running already we need to configure the TX slots in
@@ -1016,8 +1026,11 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 		 */
 		if (mcasp_is_synchronous(mcasp) && !mcasp->channels)
 			mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMCTL_REG,
-				       FSXMOD(total_slots), FSXMOD(0x1FF));
+				       FSXMOD(mod), FSXMOD(0x1FF));
 	}
+
+	/* Disable the DIT */
+	mcasp_clr_bits(mcasp, DAVINCI_MCASP_TXDITCTL_REG, DITEN);
 
 	return 0;
 }
@@ -1179,6 +1192,23 @@ static snd_pcm_sframes_t davinci_mcasp_delay(
 	return fifo_use / substream->runtime->channels;
 }
 
+static int is_dsd(snd_pcm_format_t format)
+{
+	switch (format) {
+		case SNDRV_PCM_FORMAT_DSD_U8:
+		case SNDRV_PCM_FORMAT_DSD_U16_LE:
+		case SNDRV_PCM_FORMAT_DSD_U16_BE:
+		case SNDRV_PCM_FORMAT_DSD_U32_LE:
+		case SNDRV_PCM_FORMAT_DSD_U32_BE:
+			return 1;
+			break;
+
+		default:
+			return 0;
+			break;
+	}
+}
+
 static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 					struct snd_pcm_hw_params *params,
 					struct snd_soc_dai *cpu_dai)
@@ -1188,6 +1218,8 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	int channels = params_channels(params);
 	int period_size = params_period_size(params);
 	int ret;
+
+	mcasp->dsd_mode[substream->stream] = is_dsd(params_format(params));
 
 	ret = davinci_mcasp_set_dai_fmt(cpu_dai, mcasp->dai_fmt);
 	if (ret)
@@ -1245,6 +1277,20 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 
 	case SNDRV_PCM_FORMAT_U32_LE:
 	case SNDRV_PCM_FORMAT_S32_LE:
+		word_length = 32;
+		break;
+
+	case SNDRV_PCM_FORMAT_DSD_U8:
+		word_length = 8;
+		break;
+
+	case SNDRV_PCM_FORMAT_DSD_U16_LE:
+	case SNDRV_PCM_FORMAT_DSD_U16_BE:
+		word_length = 16;
+		break;
+
+	case SNDRV_PCM_FORMAT_DSD_U32_LE:
+	case SNDRV_PCM_FORMAT_DSD_U32_BE:
 		word_length = 32;
 		break;
 
@@ -1574,7 +1620,7 @@ static int davinci_mcasp_dai_probe(struct snd_soc_dai *dai)
 	return 0;
 }
 
-#define DAVINCI_MCASP_RATES	SNDRV_PCM_RATE_8000_192000
+#define DAVINCI_MCASP_RATES	(SNDRV_PCM_RATE_8000_384000 | SNDRV_PCM_RATE_CONTINUOUS)
 
 #define DAVINCI_MCASP_PCM_FMTS (SNDRV_PCM_FMTBIT_S8 | \
 				SNDRV_PCM_FMTBIT_U8 | \
@@ -1585,7 +1631,10 @@ static int davinci_mcasp_dai_probe(struct snd_soc_dai *dai)
 				SNDRV_PCM_FMTBIT_S24_3LE | \
 				SNDRV_PCM_FMTBIT_U24_3LE | \
 				SNDRV_PCM_FMTBIT_S32_LE | \
-				SNDRV_PCM_FMTBIT_U32_LE)
+				SNDRV_PCM_FMTBIT_U32_LE | \
+				SNDRV_PCM_FMTBIT_DSD_U8 | \
+				SNDRV_PCM_FMTBIT_DSD_U16_LE | \
+				SNDRV_PCM_FMTBIT_DSD_U32_LE)
 
 static struct snd_soc_dai_driver davinci_mcasp_dai[] = {
 	{
