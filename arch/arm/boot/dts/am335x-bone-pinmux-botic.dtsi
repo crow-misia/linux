@@ -1,0 +1,95 @@
+/ {
+	clk_mcasp0_fixed: clk_mcasp0_fixed {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		clock-frequency = <24576000>;
+	};
+
+	clk_mcasp0: clk_mcasp0 {
+		#clock-cells = <0>;
+		compatible = "gpio-gate-clock";
+		clocks = <&clk_mcasp0_fixed>;
+		enable-gpios = <&gpio1 27 0>; /* BeagleBone Black Clk enable on GPIO1_27 */
+	};
+};
+
+&am33xx_pinmux {
+	botic_cape_common_pins: botic_cape_common_pins {
+		pinctrl-single,pins = <
+			/* onboard 24.576MHz oscillator control */
+			AM33XX_IOPAD(0x86c, PIN_OUTPUT_PULLDOWN | MUX_MODE7) /* gpmc_a11.GPIO1_27 */
+			/* external masterclock enable */
+			AM33XX_IOPAD(0x848, PIN_OUTPUT_PULLDOWN | MUX_MODE7) /* gpmc_a2.gpio1_18 */
+			/* external masterclock switch */
+			AM33XX_IOPAD(0x984, PIN_OUTPUT_PULLDOWN | MUX_MODE7) /* uart1_txd.gpio0_15 */
+			/* DSD format switch */
+			AM33XX_IOPAD(0x980, PIN_OUTPUT_PULLDOWN | MUX_MODE7) /* uart1_rxd.gpio0_14 */
+			/* master clock */
+			AM33XX_IOPAD(0x9ac, PIN_INPUT           | MUX_MODE0) /* mcasp0_ahcklx.mcasp0_ahclkx */
+			/* bitclock */
+			AM33XX_IOPAD(0x990, PIN_INPUT           | MUX_MODE0) /* mcasp0_aclkx.mcasp0_aclkx */
+			/* wordclock */
+			AM33XX_IOPAD(0x994, PIN_INPUT           | MUX_MODE0) /* mcasp0_fsx.mcasp0_fsx */
+			/* data pins */
+			AM33XX_IOPAD(0x998, PIN_INPUT           | MUX_MODE0) /* mcasp0_axr0.mcasp0_axr0 */
+			AM33XX_IOPAD(0x9a8, PIN_INPUT           | MUX_MODE0) /* mcasp0_axr1.mcasp0_axr1 */
+			AM33XX_IOPAD(0x9a4, PIN_INPUT           | MUX_MODE2) /* mcasp0_fsr.mcasp0_axr3 */
+			/* disable CLKOUT2 to allow usage of mcasp0_axr1 on P9_42 */
+			AM33XX_IOPAD(0x9b4, PIN_INPUT           | MUX_MODE7) /* xdma_event_intr1.gpio0_20 */
+		>;
+	};
+	botic_cape_default_pins: botic_cape_default_pins {
+		/* this configuration will allow to use AHCLKR in asynchronous mode later */
+		pinctrl-single,pins = <
+			/* data pins */
+			AM33XX_IOPAD(0x9a0, PIN_INPUT           | MUX_MODE2) /* mcasp0_ahclkr.mcasp0_axr2 */
+			/* disable eCAP0_in_PWM0_out to allow usage of mcasp0_axr2 on P9_41 */
+			AM33XX_IOPAD(0x964, PIN_INPUT           | MUX_MODE7) /* ecap0_in_pwm0_out.gpio0_7 */
+		>;
+	};
+	botic_cape_compat_pins: botic_cape_compat_pins {
+		/* compatible with original BBB setup, this output is connected also to HDMI transmitter */
+		pinctrl-single,pins = <
+			/* data pins */
+			AM33XX_IOPAD(0x99c, PIN_INPUT           | MUX_MODE2) /* mcasp0_ahclkr.mcasp0_axr2 */
+		>;
+	};
+
+	i2c1_pins: pinmux_bb_i2c1_pins {
+		pinctrl-single,pins = <
+			AM33XX_IOPAD(0x958, PIN_OUTPUT_PULLUP | INPUT_EN | MUX_MODE2) /* spi0_d1.I2C1_SDA */
+			AM33XX_IOPAD(0x95c, PIN_OUTPUT_PULLUP | INPUT_EN | MUX_MODE2) /* spi0_cs0.I2C1_SCL */
+		>;
+	};
+};
+
+/* Enable McASP. Default parameters can be changed during run-time. */
+&mcasp0 {
+	status = "okay";
+	op-mode = <0>;		/* MCASP_IIS_MODE */
+	tdm-slots = <2>;
+	num-serializer = <4>;
+	serial-dir = <	/* 0: INACTIVE, 1: TX, 2: RX */
+		1 1 1 1
+	>;
+	tx-num-evt = <16>;
+	rx-num-evt = <1>;
+};
+
+/* Enable ADC driver. */
+&tscadc {
+	status = "okay";
+};
+
+/* (Hermes-BBB) A digital volume pot is connected to the AIN4. */
+&am335x_adc {
+	ti,adc-channels = <4>;
+};
+
+/* (Hermes-BBB) The I2C1 for isolated I2C access. */
+&i2c1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins>;
+	clock-frequency = <100000>;
+};
