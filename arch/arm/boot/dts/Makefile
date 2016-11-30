@@ -715,9 +715,13 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-boneblack-roboticscape.dtb \
 	am335x-boneblack-uboot.dtb \
 	am335x-boneblack-wireless.dtb \
+	am335x-boneblack-botic.dtb \
+	am335x-boneblack-botic-sabre32.dtb \
 	am335x-boneblue.dtb \
 	am335x-bonegreen.dtb \
 	am335x-bonegreen-wireless.dtb \
+	am335x-bonegreen-botic.dtb \
+	am335x-bonegreen-botic-sabre32.dtb \
 	am335x-chiliboard.dtb \
 	am335x-cm-t335.dtb \
 	am335x-evm.dtb \
