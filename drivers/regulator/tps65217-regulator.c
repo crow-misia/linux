@@ -258,7 +258,19 @@ static int tps65217_regulator_probe(struct platform_device *pdev)
 		tps->strobes[i] = val & regulators[i].bypass_mask;
 	}
 
-	return 0;
+	ret = tps65217_set_bits(tps, TPS65217_REG_DEFSLEW,
+					TPS65217_DEFSLEW_PFM_EN1, TPS65217_DEFSLEW_PFM_EN1,
+					TPS65217_PROTECT_L2);
+	if (ret == 0)
+		ret = tps65217_set_bits(tps, TPS65217_REG_DEFSLEW,
+					TPS65217_DEFSLEW_PFM_EN2, TPS65217_DEFSLEW_PFM_EN2,
+					TPS65217_PROTECT_L2);
+	if (ret == 0)
+		ret = tps65217_set_bits(tps, TPS65217_REG_DEFSLEW,
+					TPS65217_DEFSLEW_PFM_EN3, TPS65217_DEFSLEW_PFM_EN3,
+					TPS65217_PROTECT_L2);
+
+	return ret;
 }
 
 static struct platform_driver tps65217_regulator_driver = {
