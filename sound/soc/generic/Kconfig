@@ -15,6 +15,19 @@ config SND_SIMPLE_SCU_CARD
 	  This option enables generic simple SCU sound card support.
 	  It supports DPCM of multi CPU single Codec system.
 
+config SND_BOTIC_CARD
+	tristate "ASoC Botic sound card support"
+	help
+	  This option enables Botic sound card support
+
+config SND_AM33XX_SOC_BOTIC
+	tristate "Botic on BeagleBone Black"
+	depends on SOC_AM33XX
+	select SND_BOTIC_CARD
+	select SND_SOC_DAVINCI_MCASP
+	help
+	  Say Y or M if you want to add support for Botic on BeagleBone Black.
+
 config SND_AUDIO_GRAPH_CARD
 	tristate "ASoC Audio Graph sound card support"
 	depends on OF
