@@ -114,6 +114,10 @@ struct davinci_mcasp {
 	/* Used for comstraint setting on the second stream */
 	u32	channels;
 
+	u32	autogpio_mask;
+	u32	autogpio_muted;
+	u32	autogpio_playing;
+
 #ifdef CONFIG_GPIOLIB
 	struct gpio_chip gpio_chip;
 #endif
@@ -125,6 +129,9 @@ struct davinci_mcasp {
 	struct davinci_mcasp_ruledata ruledata[2];
 	struct snd_pcm_hw_constraint_list chconstr[2];
 };
+
+static int davinci_mcasp_mute_stream(struct snd_soc_dai *cpu_dai,
+				int mute, int stream);
 
 static inline void mcasp_set_bits(struct davinci_mcasp *mcasp, u32 offset,
 				  u32 val)
@@ -920,12 +927,14 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 			       mcasp->serial_dir[i]);
 		if (mcasp->serial_dir[i] == TX_MODE &&
 					tx_ser < max_active_serializers) {
+			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, PIN_BIT_AXR(i));
 			mcasp_mod_bits(mcasp, DAVINCI_MCASP_XRSRCTL_REG(i),
 				       mcasp->dismod, DISMOD_MASK);
 			set_bit(PIN_BIT_AXR(i), &mcasp->pdir);
 			tx_ser++;
 		} else if (mcasp->serial_dir[i] == RX_MODE &&
 					rx_ser < max_active_serializers) {
+			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, PIN_BIT_AXR(i));
 			clear_bit(PIN_BIT_AXR(i), &mcasp->pdir);
 			rx_ser++;
 		} else if (mcasp->serial_dir[i] == INACTIVE_MODE) {
@@ -1273,6 +1282,10 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	int ret;
 
 	mcasp->dsd_mode[substream->stream] = is_dsd(params_format(params));
+
+	ret = davinci_mcasp_mute_stream(cpu_dai, 1, substream->stream);
+	if (ret)
+		return ret;
 
 	ret = davinci_mcasp_set_dai_fmt(cpu_dai, mcasp->dai_fmt);
 	if (ret)
@@ -1650,6 +1663,30 @@ static void davinci_mcasp_shutdown(struct snd_pcm_substream *substream,
 		mcasp->channels = 0;
 }
 
+static int davinci_mcasp_mute_stream(struct snd_soc_dai *cpu_dai,
+				int mute, int stream)
+{
+	struct davinci_mcasp *mcasp = snd_soc_dai_get_drvdata(cpu_dai);
+	u32 mask;
+	u32 val;
+
+	mask = mcasp->autogpio_mask;
+	val = mute ? mcasp->autogpio_muted : mcasp->autogpio_playing;
+	if (mcasp->dsd_mode[stream]) {
+		mask = (mask & 0xffff0000U) >> 16;
+		val = (val & 0xffff0000U) >> 16;
+	} else {
+		mask &= 0xffffU;
+		val &= 0xffffU;
+	}
+
+	mcasp_set_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, mask);
+	mcasp_mod_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, val, mask);
+	mcasp_set_bits(mcasp, DAVINCI_MCASP_PDIR_REG, mask);
+
+	return 0;
+}
+
 static const struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 	.startup	= davinci_mcasp_startup,
 	.shutdown	= davinci_mcasp_shutdown,
@@ -1661,6 +1698,7 @@ static const struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 	.set_sysclk	= davinci_mcasp_set_sysclk,
 	.set_tdm_slot	= davinci_mcasp_set_tdm_slot,
 	.set_channel_map	= davinci_mcasp_set_channel_map,
+	.mute_stream	= davinci_mcasp_mute_stream,
 };
 
 static int davinci_mcasp_dai_probe(struct snd_soc_dai *dai)
@@ -1933,6 +1971,16 @@ static struct davinci_mcasp_pdata *davinci_mcasp_set_pdata_from_of(
 	} else {
 		pdata->dismod = DISMOD_LOW;
 	}
+
+	ret = of_property_read_u32(np, "autogpio-mask", &val);
+	if (ret >= 0)
+		pdata->autogpio_mask = val;
+	ret = of_property_read_u32(np, "autogpio-muted", &val);
+	if (ret >= 0)
+		pdata->autogpio_muted = val;
+	ret = of_property_read_u32(np, "autogpio-playing", &val);
+	if (ret >= 0)
+		pdata->autogpio_playing = val;
 
 	return  pdata;
 
