@@ -118,9 +118,14 @@ struct davinci_mcasp {
 	bool	is_mcasp8;
 	u8	hdmi_sel_gpio;
 #endif
+
+	u32 autogpio_mask;
+	u32 autogpio_muted;
+	u32 autogpio_playing;
 };
 
-static int mute_pin = -1;
+static int davinci_mcasp_mute_stream(struct snd_soc_dai *cpu_dai,
+				int mute, int stream);
 
 static inline void mcasp_set_bits(struct davinci_mcasp *mcasp, u32 offset,
 				  u32 val)
@@ -877,14 +882,6 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDIR_REG, AXR(i));
 			rx_ser++;
 		} else {
-			mcasp_set_bits(mcasp, DAVINCI_MCASP_PDIR_REG, AXR(i));
-			if (mute_pin == i ||
-					(mute_pin == 4 && (i == 2 || i == 3))) {
-				mcasp_set_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(i));
-			} else {
-				mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(i));
-			}
-			mcasp_set_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, AXR(i));
 			mcasp_mod_bits(mcasp, DAVINCI_MCASP_XRSRCTL_REG(i),
 				       SRMOD_INACTIVE, SRMOD_MASK);
 		}
@@ -1223,6 +1220,10 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	int ret;
 
 	mcasp->dsd_mode[substream->stream] = is_dsd(params_format(params));
+
+	ret = davinci_mcasp_mute_stream(cpu_dai, 1, substream->stream);
+	if (ret)
+		return ret;
 
 	ret = davinci_mcasp_set_dai_fmt(cpu_dai, mcasp->dai_fmt);
 	if (ret)
@@ -1604,22 +1605,22 @@ static int davinci_mcasp_mute_stream(struct snd_soc_dai *cpu_dai,
 				int mute, int stream)
 {
 	struct davinci_mcasp *mcasp = snd_soc_dai_get_drvdata(cpu_dai);
+	u32 mask;
+	u32 val;
 
-	if (mute_pin >= 0 || mute_pin <= 3) {
-		if (mute) {
-			mcasp_set_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(mute_pin));
-		} else {
-			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(mute_pin));
-		}
-	} else if (mute_pin == 4) {
-		if (mute) {
-			mcasp_set_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(2));
-			mcasp_set_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(3));
-		} else {
-			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(2));
-			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, AXR(3));
-		}
+	mask = mcasp->autogpio_mask;
+	val = mute ? mcasp->autogpio_muted : mcasp->autogpio_playing;
+	if (mcasp->dsd_mode[stream]) {
+		mask = (mask & 0xffff0000U) >> 16;
+		val = (val & 0xffff0000U) >> 16;
+	} else {
+		mask &= 0xffffU;
+		val &= 0xffffU;
 	}
+
+	mcasp_set_bits(mcasp, DAVINCI_MCASP_PFUNC_REG, mask);
+	mcasp_mod_bits(mcasp, DAVINCI_MCASP_PDOUT_REG, val, mask);
+	mcasp_set_bits(mcasp, DAVINCI_MCASP_PDIR_REG, mask);
 
 	return 0;
 }
@@ -1966,6 +1967,18 @@ static struct davinci_mcasp_pdata *davinci_mcasp_set_pdata_from_of(
 	if (ret >= 0)
 		pdata->sram_size_capture = val;
 
+	ret = of_property_read_u32(np, "autogpio-mask", &val);
+	if (ret >= 0)
+		pdata->autogpio_mask = val;
+
+	ret = of_property_read_u32(np, "autogpio-muted", &val);
+	if (ret >= 0)
+		pdata->autogpio_muted = val;
+
+	ret = of_property_read_u32(np, "autogpio-playing", &val);
+	if (ret >= 0)
+		pdata->autogpio_playing = val;
+
 	return  pdata;
 
 nodata:
@@ -2244,6 +2257,9 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	mcasp->version = pdata->version;
 	mcasp->txnumevt = pdata->txnumevt;
 	mcasp->rxnumevt = pdata->rxnumevt;
+	mcasp->autogpio_mask = pdata->autogpio_mask;
+	mcasp->autogpio_muted = pdata->autogpio_muted;
+	mcasp->autogpio_playing = pdata->autogpio_playing;
 
 	mcasp->dev = &pdev->dev;
 
@@ -2507,9 +2523,6 @@ static struct platform_driver davinci_mcasp_driver = {
 };
 
 module_platform_driver(davinci_mcasp_driver);
-
-module_param(mute_pin, int, 0644);
-MODULE_PARM_DESC(mute_pin, "use some of McASP pins as mute pin: 0:0, 1:1, 2:2, 3:3, 4:2+3");
 
 MODULE_AUTHOR("Steve Chen");
 MODULE_DESCRIPTION("TI DAVINCI McASP SoC Interface");
