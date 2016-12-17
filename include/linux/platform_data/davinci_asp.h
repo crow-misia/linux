@@ -87,6 +87,10 @@ struct davinci_mcasp_pdata {
 	u8 rxnumevt;
 	int tx_dma_channel;
 	int rx_dma_channel;
+
+	u32 autogpio_mask;
+	u32 autogpio_muted;
+	u32 autogpio_playing;
 };
 /* TODO: Fix arch/arm/mach-davinci/ users and remove this define */
 #define snd_platform_data davinci_mcasp_pdata
