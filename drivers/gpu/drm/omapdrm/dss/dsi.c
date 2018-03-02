@@ -5362,7 +5362,7 @@ static int dsi_bind(struct device *dev, struct device *master, void *data)
 
 	r = dsi_runtime_get(dsi);
 	if (r)
-		goto err_runtime_get;
+		goto err_pm_disable;
 
 	rev = dsi_read_reg(dsi, DSI_REVISION);
 	dev_dbg(dev, "OMAP DSI rev %d.%d\n",
@@ -5383,7 +5383,7 @@ static int dsi_bind(struct device *dev, struct device *master, void *data)
 	r = dsi_probe_of(dsi);
 	if (r) {
 		DSSERR("Invalid DSI DT data\n");
-		goto err_probe_of;
+		goto err_uninit_output;
 	}
 
 	r = of_platform_populate(dev->of_node, NULL, NULL, dev);
@@ -5406,11 +5406,10 @@ static int dsi_bind(struct device *dev, struct device *master, void *data)
 
 	return 0;
 
-err_probe_of:
+err_uninit_output:
 	dsi_uninit_output(dsi);
 	dsi_runtime_put(dsi);
-
-err_runtime_get:
+err_pm_disable:
 	pm_runtime_disable(dev);
 	return r;
 }
