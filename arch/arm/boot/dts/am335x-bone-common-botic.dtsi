@@ -2,6 +2,8 @@
 	botic_codec: botic_codec {
 		compatible = "botic-audio-codec";
 		status = "okay";
+
+		sdmode-gpios = <&gpio0 31 0>;
 	};
 
 	botic {

@@ -7,12 +7,15 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/of_platform.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/soc.h>
+#include <sound/soc-dai.h>
 
 #define BOTIC_CODEC_NAME "botic-codec"
 #define BOTIC_CODEC_DAI_NAME "botic-hifi"
@@ -45,25 +48,29 @@
             SNDRV_PCM_FMTBIT_DSD_U32_LE | \
             0)
 
-static struct snd_soc_dai_driver botic_codec_dai = {
-    .name = BOTIC_CODEC_DAI_NAME,
-    .playback = {
-        .channels_min = 2,
-        .channels_max = 8,
-        .rate_min = 11025,
-        .rate_max = 768000,
-        .rates = BOTIC_RATES,
-        .formats = BOTIC_FORMATS,
-    },
-    .capture = {
-        .channels_min = 2,
-        .channels_max = 8,
-        .rate_min = 11025,
-        .rate_max = 768000,
-        .rates = BOTIC_RATES,
-        .formats = BOTIC_FORMATS,
-    },
-};
+static int botic_daiops_trigger(struct snd_pcm_substream *substream,
+		int cmd, struct snd_soc_dai *dai)
+{
+	struct gpio_desc *sdmode = snd_soc_dai_get_drvdata(dai);
+
+	if (!sdmode)
+		return 0;
+
+	switch (cmd) {
+	case SNDRV_PCM_TRIGGER_START:
+	case SNDRV_PCM_TRIGGER_RESUME:
+	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		gpiod_set_value(sdmode, 1);
+		break;
+	case SNDRV_PCM_TRIGGER_STOP:
+	case SNDRV_PCM_TRIGGER_SUSPEND:
+	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+		gpiod_set_value(sdmode, 0);
+		break;
+	}
+
+	return 0;
+}
 
 static const struct snd_kcontrol_new botic_codec_controls[] = {
     /* Dummy controls for some applications that requires ALSA controls. */
@@ -71,51 +78,84 @@ static const struct snd_kcontrol_new botic_codec_controls[] = {
     SOC_SINGLE("Master Playback Switch", 1, 0, 1, 1),
 };
 
-static unsigned int botic_codec_read(struct snd_soc_codec *codec,
-        unsigned int reg)
+static int botic_codec_probe(struct snd_soc_codec *codec)
 {
-    return 0;
+	struct gpio_desc *sdmode;
+
+	sdmode = devm_gpiod_get_optional(codec->dev, "sdmode", GPIOD_OUT_LOW);
+	if (IS_ERR(sdmode))
+		return PTR_ERR(sdmode);
+
+	snd_soc_codec_set_drvdata(codec, sdmode);
+
+	return 0;
 }
 
-static int botic_codec_write(struct snd_soc_codec *codec,
-        unsigned int reg, unsigned int val)
-{
-    return 0;
-}
-
-static struct snd_soc_codec_driver botic_codec_socdrv = {
-    .read = botic_codec_read,
-    .write = botic_codec_write,
+static struct snd_soc_codec_driver botic_codec_driver = {
+	.probe      = botic_codec_probe,
     .component_driver = {
         .controls = botic_codec_controls,
         .num_controls = ARRAY_SIZE(botic_codec_controls),
     },
 };
 
-static int asoc_botic_codec_probe(struct platform_device *pdev)
+static const struct snd_soc_dai_ops botic_dai_ops = {
+	.trigger	= botic_daiops_trigger,
+};
+
+static struct snd_soc_dai_driver botic_dai_driver = {
+    .name = BOTIC_CODEC_DAI_NAME,
+    .playback = {
+        .channels_min = 1,
+        .channels_max = 8,
+        .rate_min = 11025,
+        .rate_max = 768000,
+        .rates = BOTIC_RATES,
+        .formats = BOTIC_FORMATS,
+    },
+    .capture = {
+        .channels_min = 1,
+        .channels_max = 8,
+        .rate_min = 11025,
+        .rate_max = 768000,
+        .rates = BOTIC_RATES,
+        .formats = BOTIC_FORMATS,
+    },
+    .ops    = &botic_dai_ops,
+};
+
+static int asoc_botic_platform_probe(struct platform_device *pdev)
 {
-    return snd_soc_register_codec(&pdev->dev,
-            &botic_codec_socdrv, &botic_codec_dai, 1);
+    return snd_soc_register_codec(&pdev->dev, &botic_codec_driver,
+        &botic_dai_driver, 1);
+}
+
+static int asoc_botic_platform_remove(struct platform_device *pdev)
+{
+	snd_soc_unregister_codec(&pdev->dev);
+
+	return 0;
 }
 
 #if defined(CONFIG_OF)
-static const struct of_device_id asoc_botic_codec_dt_ids[] = {
+static const struct of_device_id asoc_botic_device_id[] = {
     { .compatible = "botic-audio-codec" },
     { },
 };
 
-MODULE_DEVICE_TABLE(of, asoc_botic_codec_dt_ids);
+MODULE_DEVICE_TABLE(of, asoc_botic_device_id);
 #endif
 
-static struct platform_driver asoc_botic_codec_driver = {
-    .probe = asoc_botic_codec_probe,
+static struct platform_driver asoc_botic_platform_driver = {
     .driver = {
         .name = "asoc-botic-codec",
-        .of_match_table = of_match_ptr(asoc_botic_codec_dt_ids),
+        .of_match_table = of_match_ptr(asoc_botic_device_id),
     },
+    .probe = asoc_botic_platform_probe,
+    .remove = asoc_botic_platform_remove,
 };
 
-module_platform_driver(asoc_botic_codec_driver);
+module_platform_driver(asoc_botic_platform_driver);
 
 MODULE_AUTHOR("Miroslav Rudisin");
 MODULE_DESCRIPTION("ASoC Botic sound codec");
