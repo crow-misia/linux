@@ -376,7 +376,7 @@ config SUN50I_ERRATUM_UNKNOWN1
 	  allwinner,erratum-unknown1 property is found in the timer node.
 
 config ARM_GLOBAL_TIMER
-	bool "Support for the ARM global timer" if COMPILE_TEST
+	bool "Support for the ARM global timer"
 	select TIMER_OF if OF
 	depends on ARM
 	help
