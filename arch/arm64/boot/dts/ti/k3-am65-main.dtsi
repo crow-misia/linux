@@ -376,6 +376,14 @@
 		clock-names = "fck";
 	};
 
+	scm_conf: scm_conf@100000 {
+		compatible = "syscon", "simple-mfd";
+		reg = <0 0x00100000 0 0x1c000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x0 0x00100000 0x1c000>;
+	};
+
 	mcasp0: mcasp@02B00000 {
 		compatible = "ti,am33xx-mcasp-audio";
 		reg = <0x0 0x02B00000 0x0 0x2000>,
