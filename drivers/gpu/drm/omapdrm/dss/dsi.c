@@ -4156,10 +4156,10 @@ static void dsi_display_uninit_dsi(struct dsi_data *dsi, bool disconnect_lanes,
 	}
 }
 
-static int dsi_display_enable(struct omap_dss_device *dssdev)
+static void dsi_display_enable(struct omap_dss_device *dssdev)
 {
 	struct dsi_data *dsi = to_dsi_data(dssdev);
-	int r = 0;
+	int r;
 
 	DSSDBG("dsi_display_enable\n");
 
@@ -4179,14 +4179,13 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 
 	mutex_unlock(&dsi->lock);
 
-	return 0;
+	return;
 
 err_init_dsi:
 	dsi_runtime_put(dsi);
 err_get_dsi:
 	mutex_unlock(&dsi->lock);
 	DSSDBG("dsi_display_enable FAILED\n");
-	return r;
 }
 
 static void dsi_display_disable(struct omap_dss_device *dssdev,
